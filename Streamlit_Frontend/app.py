@@ -14,7 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import pypdf
 
 # --- Directory and Path Configuration ---
-PROD_BASE_DIR = Path(r"F:\AI and Data Science Projects\AI-Powered Resume Screening Tool\Streamlit_Frontend")
+PROD_BASE_DIR = Path(r"Streamlit_Frontend")
 BASE_DIR = PROD_BASE_DIR if PROD_BASE_DIR.exists() else Path(__file__).resolve().parent
 
 INDEX_PATH = BASE_DIR / "resume_faiss_index.bin"
