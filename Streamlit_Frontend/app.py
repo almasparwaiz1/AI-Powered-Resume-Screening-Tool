@@ -5,13 +5,19 @@ import faiss
 from sentence_transformers import SentenceTransformer
 from catboost import CatBoostClassifier
 import re
-import spacy
 from spacy.matcher import PhraseMatcher
 import os
 import pickle
 from pathlib import Path
 from sklearn.metrics.pairwise import cosine_similarity
 import pypdf
+import spacy
+
+try:
+    nlp = spacy.load("en_core_web_sm")
+except:
+    nlp = spacy.blank("en")
+
 
 # --- Directory and Path Configuration ---
 PROD_BASE_DIR = Path(r"Streamlit_Frontend")
