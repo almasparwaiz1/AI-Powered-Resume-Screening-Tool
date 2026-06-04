@@ -2,12 +2,18 @@ streamlit==1.45.1
 pandas==2.2.3
 numpy<2.0
 scikit-learn
-sentence-transformers
-torch
-torchvision
-transformers
-faiss-cpu>=1.13.0
-catboost
-spacy
+
+torch==2.1.2
+torchvision==0.16.2
+
+transformers==4.38.2
+sentence-transformers==2.6.1
+
+faiss-cpu>=1.7.4
+
+spacy==3.7.4
 pypdf
 joblib
+catboost
+
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
