@@ -253,27 +253,20 @@ def perform_full_analysis(query_text, num_results, sbert_model, full_df, catboos
     final_df = pd.DataFrame(results)
     ml_df = pd.DataFrame(ml_prediction_data)[ORDERED_FEATURES] 
 
-    raw_scores = []
+    # --- Real Accuracy Calculations (Removed Min-Max Normalization) ---
     if catboost_model is not None:
         try:
-            # Use predict_proba to extract continuous float probabilities
-            raw_scores = catboost_model.predict_proba(ml_df)[:, 1]
+            true_probs = catboost_model.predict_proba(ml_df)[:, 1]
         except Exception:
-            raw_scores = (ml_df['Skills_Similarity_Score'] * 0.6) + (ml_df['Text_Similarity_Score'] * 0.4)
+            # Weighted ensemble match fallback
+            true_probs = (ml_df['Skills_Similarity_Score'] * 0.6) + (ml_df['Text_Similarity_Score'] * 0.4)
     else:
-        raw_scores = (ml_df['Skills_Similarity_Score'] * 0.6) + (ml_df['Text_Similarity_Score'] * 0.4)
+        true_probs = (ml_df['Skills_Similarity_Score'] * 0.6) + (ml_df['Text_Similarity_Score'] * 0.4)
 
-    # --- Min-Max Scaling Normalization Layer ---
-    # Prevents raw compressed fractions (e.g. 0.011) from breaking layout percentages
-    min_score, max_score = np.min(raw_scores), np.max(raw_scores)
-    if max_score - min_score > 1e-5:
-        # Dynamically scale features across standard 0.40 -> 0.99 spectrum bounds
-        normalized_probs = 0.40 + 0.59 * ((raw_scores - min_score) / (max_score - min_score))
-    else:
-        normalized_probs = np.full_like(raw_scores, 0.75)
-
-    final_df['Prediction_Probability'] = normalized_probs
-    final_df['Predicted_High_Potential'] = (normalized_probs > 0.70).astype(int)
+    final_df['Prediction_Probability'] = true_probs
+    
+    # 70% precision threshold for hiring mapping
+    final_df['Decision_Status'] = np.where(true_probs >= 0.70, '🟢 Hired', '🔴 Rejected')
 
     return final_df.sort_values(by='Prediction_Probability', ascending=False).head(num_results).reset_index(drop=True)
 
@@ -369,18 +362,17 @@ def main():
             st.warning("No matching candidates found.")
             return
 
-        st.subheader(f"Top {len(results_df)} Candidates")
+        st.subheader(f"Top {len(results_df)} Candidates Matched")
         for i, row in results_df.iterrows():
-            is_high = row.get('Predicted_High_Potential', 0) == 1
-            status = '🎯 High Potential' if is_high else '👤 Good Match'
+            status = row.get('Decision_Status', '🔴 Rejected')
             prob = row.get('Prediction_Probability', 0)
 
-            with st.expander(f"Rank {i+1} | {status} — {row['Filename']} | Fit: {prob:.1%}"):
+            with st.expander(f"Rank {i+1} | Status: {status} — {row['Filename']} | Match Accuracy: {prob:.1%}"):
                 col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.metric("Fit Probability", f"{prob:.1%}")
-                    st.metric("Experience", f"{row.get('Years_of_Experience', 0)} years")
-                    st.metric("Education Score", f"{row.get('Education_Score', 0)}/5")
+                    st.metric("System Match Accuracy", f"{prob:.1%}")
+                    st.metric("Experience Verified", f"{row.get('Years_of_Experience', 0)} years")
+                    st.metric("Education Tier Score", f"{row.get('Education_Score', 0)}/5")
                 with col2:
                     matched = row.get('Matched_Skills', [])
                     missing = row.get('Missing_Skills', [])
@@ -389,7 +381,7 @@ def main():
                     if missing:
                         st.warning("**Missing Skills:** " + ", ".join(missing))
                     if row.get('Seniority_Keywords'):
-                        st.info("**Seniority:** " + ", ".join(row['Seniority_Keywords']))
+                        st.info("**Seniority Flags:** " + ", ".join(row['Seniority_Keywords']))
 
                 st.markdown("**Resume Snippet:**")
                 st.text_area("", value=row['Parsed_Resume_Text'][:1200] + "...", height=200, disabled=True, key=f"text_{i}")
