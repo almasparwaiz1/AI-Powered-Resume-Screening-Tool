@@ -253,20 +253,24 @@ def perform_full_analysis(query_text, num_results, sbert_model, full_df, catboos
     final_df = pd.DataFrame(results)
     ml_df = pd.DataFrame(ml_prediction_data)[ORDERED_FEATURES] 
 
-    # --- Real Accuracy Calculations (Removed Min-Max Normalization) ---
+    # --- Clean Accuracy Metric Processing Pipeline ---
     if catboost_model is not None:
         try:
-            true_probs = catboost_model.predict_proba(ml_df)[:, 1]
+            # Model naturally outputs continuous decimal floats between 0.0 and 1.0
+            raw_scores = catboost_model.predict_proba(ml_df)[:, 1]
         except Exception:
-            # Weighted ensemble match fallback
-            true_probs = (ml_df['Skills_Similarity_Score'] * 0.6) + (ml_df['Text_Similarity_Score'] * 0.4)
+            # Weighted algorithmic fallback if production inference encounters syntax updates
+            raw_scores = (ml_df['Skills_Similarity_Score'] * 0.65) + (ml_df['Text_Similarity_Score'] * 0.35)
     else:
-        true_probs = (ml_df['Skills_Similarity_Score'] * 0.6) + (ml_df['Text_Similarity_Score'] * 0.4)
+        raw_scores = (ml_df['Skills_Similarity_Score'] * 0.65) + (ml_df['Text_Similarity_Score'] * 0.35)
 
-    final_df['Prediction_Probability'] = true_probs
+    # Strictly lock metric bounds between 0.00 and 1.00 to eliminate structural layout distortion
+    clean_accuracies = np.clip(raw_scores, 0.0, 1.0)
+
+    final_df['Prediction_Probability'] = clean_accuracies
     
-    # 70% precision threshold for hiring mapping
-    final_df['Decision_Status'] = np.where(true_probs >= 0.70, '🟢 Hired', '🔴 Rejected')
+    # Standard absolute 70% threshold boundary condition to process categorical hire actions
+    final_df['Decision_Status'] = np.where(clean_accuracies >= 0.70, '🟢 Hired', '🔴 Rejected')
 
     return final_df.sort_values(by='Prediction_Probability', ascending=False).head(num_results).reset_index(drop=True)
 
@@ -367,12 +371,12 @@ def main():
             status = row.get('Decision_Status', '🔴 Rejected')
             prob = row.get('Prediction_Probability', 0)
 
-            with st.expander(f"Rank {i+1} | Status: {status} — {row['Filename']} | Match Accuracy: {prob:.1%}"):
+            with st.expander(f"Rank {i+1} | Verdict: {status} — {row['Filename']} | Match Accuracy: {prob:.1%}"):
                 col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.metric("System Match Accuracy", f"{prob:.1%}")
+                    st.metric("Match Accuracy", f"{prob:.1%}")
                     st.metric("Experience Verified", f"{row.get('Years_of_Experience', 0)} years")
-                    st.metric("Education Tier Score", f"{row.get('Education_Score', 0)}/5")
+                    st.metric("Education Score", f"{row.get('Education_Score', 0)}/5")
                 with col2:
                     matched = row.get('Matched_Skills', [])
                     missing = row.get('Missing_Skills', [])
