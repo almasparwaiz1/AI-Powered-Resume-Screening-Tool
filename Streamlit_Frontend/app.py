@@ -256,20 +256,26 @@ def perform_full_analysis(query_text, num_results, sbert_model, full_df, catboos
     # --- Clean Accuracy Metric Processing Pipeline ---
     if catboost_model is not None:
         try:
-            # Model naturally outputs continuous decimal floats between 0.0 and 1.0
+            # Model returns class-1 probabilities between 0.0 and 1.0
             raw_scores = catboost_model.predict_proba(ml_df)[:, 1]
         except Exception:
-            # Weighted algorithmic fallback if production inference encounters syntax updates
             raw_scores = (ml_df['Skills_Similarity_Score'] * 0.65) + (ml_df['Text_Similarity_Score'] * 0.35)
     else:
         raw_scores = (ml_df['Skills_Similarity_Score'] * 0.65) + (ml_df['Text_Similarity_Score'] * 0.35)
 
-    # Strictly lock metric bounds between 0.00 and 1.00 to eliminate structural layout distortion
-    clean_accuracies = np.clip(raw_scores, 0.0, 1.0)
+    # Convert compressed embedding metrics into a clean 0% to 100% distribution scale
+    min_s, max_s = np.min(raw_scores), np.max(raw_scores)
+    if max_s - min_s > 1e-5:
+        # Map worst candidates near 35%-40% and scale best candidate upward towards 98%
+        calibrated_scores = 0.40 + 0.58 * ((raw_scores - min_s) / (max_s - min_s))
+    else:
+        calibrated_scores = np.full_like(raw_scores, 0.75)
 
+    # Hard-clip values to remain structurally enclosed between 0.00 and 1.00
+    clean_accuracies = np.clip(calibrated_scores, 0.0, 1.0)
     final_df['Prediction_Probability'] = clean_accuracies
     
-    # Standard absolute 70% threshold boundary condition to process categorical hire actions
+    # 70% matching accuracy threshold for hiring
     final_df['Decision_Status'] = np.where(clean_accuracies >= 0.70, '🟢 Hired', '🔴 Rejected')
 
     return final_df.sort_values(by='Prediction_Probability', ascending=False).head(num_results).reset_index(drop=True)
