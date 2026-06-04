@@ -1,4 +1,4 @@
-streamlit
+streamlit==1.45.1
 pandas
 numpy
 scikit-learn
@@ -6,8 +6,8 @@ sentence-transformers
 torch
 torchvision
 transformers
-faiss-cpu==1.14.2
-catboost
+faiss-cpu
 spacy
+en-core-web-sm
 pypdf
 joblib
