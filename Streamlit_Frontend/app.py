@@ -13,10 +13,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import pypdf
 import spacy
 
-try:
-    nlp = spacy.load("en_core_web_sm")
-except:
-    nlp = spacy.blank("en")
+nlp = spacy.load("en_core_web_sm")
 
 
 # --- Directory and Path Configuration ---
