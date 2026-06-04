@@ -1,13 +1,13 @@
 streamlit==1.45.1
-pandas
-numpy
+pandas==2.2.3
+numpy<2.0
 scikit-learn
 sentence-transformers
 torch
 torchvision
 transformers
-faiss-cpu
+faiss-cpu>=1.13.0
+catboost
 spacy
-en-core-web-sm
 pypdf
 joblib
