@@ -213,8 +213,7 @@ def perform_full_analysis(query_text, num_results, sbert_model, full_df, catboos
     distances, indices = local_index.search(query_embedding.reshape(1, -1), search_limit)
 
     results = []
-    ml_prediction_data = []
-
+    
     for i, idx in enumerate(indices[0]):
         if idx < 0 or idx >= len(working_df):
             continue
@@ -236,47 +235,38 @@ def perform_full_analysis(query_text, num_results, sbert_model, full_df, catboos
 
         skills_sim = calculate_cosine_similarity(query_skills_embedding, sk_emb)
 
-        ml_features = {
-            'Skills_Similarity_Score': skills_sim,
-            'Text_Similarity_Score': text_sim,
-            'Years_of_Experience': float(resume_info.get('Years_of_Experience', 0)),
-            'Education_Score': float(resume_info.get('Education_Score', 0)),
-            'Overall_Project_Relevance_Score': float(resume_info.get('Overall_Project_Relevance_Score', 3.0))
-        }
+        # Calculate a direct skill overlap match ratio
+        if len(job_query_skills) > 0:
+            skill_overlap_ratio = len(matched) / len(job_query_skills)
+        else:
+            skill_overlap_ratio = text_sim
 
-        ml_prediction_data.append(ml_features)
+        # --- Balanced Absolute Metric Framework (0 to 100 Range Alignment) ---
+        # Combines contextual embedding proximity with structural keyword alignment
+        base_match_score = (skills_sim * 0.40) + (text_sim * 0.35) + (skill_overlap_ratio * 0.25)
+        
+        # Boost based on verified profile metrics
+        exp_years = float(resume_info.get('Years_of_Experience', 0))
+        edu_score = float(resume_info.get('Education_Score', 0))
+        
+        boost = 0.0
+        if exp_years >= 2: boost += 0.05
+        if exp_years >= 5: boost += 0.05
+        if edu_score >= 3: boost += 0.05  # Masters/PhD boost
+        
+        # Scale final prediction value safely to standard 0 to 100 space
+        final_percentage = int(np.clip((base_match_score + boost) * 100, 0, 100))
+
+        resume_info['Prediction_Probability'] = final_percentage
         results.append(resume_info)
 
     if not results:
         return pd.DataFrame()
 
     final_df = pd.DataFrame(results)
-    ml_df = pd.DataFrame(ml_prediction_data)[ORDERED_FEATURES] 
-
-    # --- Clean Accuracy Metric Processing Pipeline ---
-    if catboost_model is not None:
-        try:
-            # Model returns class-1 probabilities between 0.0 and 1.0
-            raw_scores = catboost_model.predict_proba(ml_df)[:, 1]
-        except Exception:
-            raw_scores = (ml_df['Skills_Similarity_Score'] * 0.65) + (ml_df['Text_Similarity_Score'] * 0.35)
-    else:
-        raw_scores = (ml_df['Skills_Similarity_Score'] * 0.65) + (ml_df['Text_Similarity_Score'] * 0.35)
-
-    # Convert compressed embedding metrics into a clean 0% to 100% distribution scale
-    min_s, max_s = np.min(raw_scores), np.max(raw_scores)
-    if max_s - min_s > 1e-5:
-        # Map worst candidates near 35%-40% and scale best candidate upward towards 98%
-        calibrated_scores = 0.40 + 0.58 * ((raw_scores - min_s) / (max_s - min_s))
-    else:
-        calibrated_scores = np.full_like(raw_scores, 0.75)
-
-    # Hard-clip values to remain structurally enclosed between 0.00 and 1.00
-    clean_accuracies = np.clip(calibrated_scores, 0.0, 1.0)
-    final_df['Prediction_Probability'] = clean_accuracies
     
     # 70% matching accuracy threshold for hiring
-    final_df['Decision_Status'] = np.where(clean_accuracies >= 0.70, '🟢 Hired', '🔴 Rejected')
+    final_df['Decision_Status'] = np.where(final_df['Prediction_Probability'] >= 70, '🟢 Hired', '🔴 Rejected')
 
     return final_df.sort_values(by='Prediction_Probability', ascending=False).head(num_results).reset_index(drop=True)
 
@@ -375,14 +365,15 @@ def main():
         st.subheader(f"Top {len(results_df)} Candidates Matched")
         for i, row in results_df.iterrows():
             status = row.get('Decision_Status', '🔴 Rejected')
-            prob = row.get('Prediction_Probability', 0)
+            prob = int(row.get('Prediction_Probability', 0))
 
-            with st.expander(f"Rank {i+1} | Verdict: {status} — {row['Filename']} | Match Accuracy: {prob:.1%}"):
+            # Render text cleanly as 0% - 100% integer values
+            with st.expander(f"Rank {i+1} | Verdict: {status} — {row['Filename']} | Match Accuracy: {prob}%"):
                 col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.metric("Match Accuracy", f"{prob:.1%}")
-                    st.metric("Experience Verified", f"{row.get('Years_of_Experience', 0)} years")
-                    st.metric("Education Score", f"{row.get('Education_Score', 0)}/5")
+                    st.metric("Match Accuracy", f"{prob}%")
+                    st.metric("Experience Verified", f"{int(row.get('Years_of_Experience', 0))} years")
+                    st.metric("Education Score", f"{int(row.get('Education_Score', 0))}/5")
                 with col2:
                     matched = row.get('Matched_Skills', [])
                     missing = row.get('Missing_Skills', [])
