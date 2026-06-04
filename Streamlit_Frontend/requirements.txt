@@ -1,9 +1,12 @@
 streamlit
 pandas
 numpy
+scikit-learn
 sentence-transformers
 torch
 transformers
-spacy
-faiss-cpu==1.7.4
+faiss-cpu==1.14.2
 catboost
+spacy
+pypdf
+joblib
