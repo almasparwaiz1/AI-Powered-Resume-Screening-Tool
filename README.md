@@ -17,7 +17,7 @@ Built using modern Natural Language Processing (NLP), semantic embeddings, and m
 
 ### Live Demo
 
-
+https://ai-powered-resume-screening-tool-appi.streamlit.app/
 
 ### Technology Stack
 
