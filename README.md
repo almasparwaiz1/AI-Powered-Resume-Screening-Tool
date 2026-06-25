@@ -1,4 +1,4 @@
-# AI-Powered Resume Screening Tool
+## AI-Powered Resume Screening Tool
 
 Finding the right candidate from hundreds of resumes is time-consuming and often inconsistent. This AI-Powered Resume Screening Tool streamlines the hiring process by automatically analyzing resumes, extracting key skills, evaluating experience and education, and ranking candidates based on their relevance to a job description.
 
